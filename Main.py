@@ -25,9 +25,8 @@ def initialize_webdriver(chromedriver_path):
     chrome_options = webdriver.ChromeOptions()
 
     #Bypass bot check
-    chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/91.0.4472.124 Safari/537.36")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    #chrome_options.add_argument("--headless")
     chrome_options.add_argument(f"webdriver.chrome.driver={chromedriver_path}")
     driver = webdriver.Chrome(options=chrome_options)
     wait = WebDriverWait(driver, 10)
@@ -51,7 +50,11 @@ def input_user_values(driver, user_code, user_spend):
     input_fields = ["CN1", "CN2", "CN3", "AmountSpent1", "AmountSpent2"]
 
     for field in input_fields:
-        element = driver.find_element(By.ID, field)
+        # Wait for the element to be present
+        element = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.ID, field))
+        )
+
         if field.startswith("Amount"):
             element.send_keys(str(user_spend[field]))
         else:
@@ -60,6 +63,7 @@ def input_user_values(driver, user_code, user_spend):
     # Submit the form
     submit_button = driver.find_element(By.ID, "NextButton")
     submit_button.click()
+
 
 def page2_error_check(driver):
     error_checks = [
@@ -83,11 +87,11 @@ def handle_error(error_message, log_message):
     print(f"{log_message}: {error_message}")
 
 def user_info():
-    code = input("Enter the 12 Digit Code: ")
-    spend = input("Enter amount spent: ")
+    #code = input("Enter the 12 Digit Code: ")
+    #spend = input("Enter amount spent: ")
 
-    #code = "7Q9DDTFZZWMZ"
-    #spend = "1.99"
+    code = "7Q9DDTFZZWMZ"
+    spend = "1.99"
 
     user_code = {
         "CN1": code[:4],
@@ -102,6 +106,39 @@ def user_info():
 
     return user_code, user_spend
 
+
+def start_form(driver):
+    user_code, user_spend = user_info()
+    input_user_values(driver, user_code, user_spend)
+
+    page2_error_check(driver)
+
+
+def fill_form_randomly(driver, wait):
+    try:
+        questions = driver.find_elements(By.CLASS_NAME, 'inputtyperblv')  # Assuming questions have this class
+
+        for question in questions:
+            answers = question.find_elements(By.CLASS_NAME, 'rbloption')  # Assuming answers have this class
+            selected_answer = random.choice(answers[:2])
+
+            # Click the visible label to select the random answer
+            label = selected_answer.find_element(By.CLASS_NAME, 'radioSimpleInput')
+            label.click()
+            time.sleep(1)  # Adjust sleep time if needed
+
+            # Click the "Next" button
+            next_button = wait.until(EC.presence_of_element_located((By.ID, "NextButton")))
+            next_button.click()
+            time.sleep(1)  # Adjust sleep time if needed
+
+            # Recursive call to fill the next question
+            fill_form_randomly(driver, wait)
+
+    except Exception as e:
+        handle_error(e, "Error while filling the form")
+
+
 def main():
     setup_logging()
     chromedriver_path = get_chromedriver_path()
@@ -111,10 +148,9 @@ def main():
         open_initial_page(driver, "https://www.mcdfoodforthoughts.com/")
         click_continue_button(driver, wait)
 
-        user_code, user_spend = user_info()
-        input_user_values(driver, user_code, user_spend)
+        start_form(driver)
 
-        page2_error_check(driver)
+        fill_form_randomly(driver, wait)
     finally:
         driver.quit()
 
